@@ -1,4 +1,4 @@
-//
+// i know
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,9 +56,14 @@ struct DHTData {
     int symlength;
     uint8_t *symbols;
 };
+struct DHTSegment {
+    struct DHTData *table;
+    int tablecount;
+    int length;
+};
 struct DHTWrapper {
-    struct DHTData *dhtdata;
-    int dhtdatacount;
+    struct DHTSegment *segment;
+    int segmentcount;
 };
 struct HuffmanNode {
     uint8_t symbol;
@@ -72,7 +77,6 @@ struct HuffmanTable {
     uint8_t *symbols;
     struct HuffmanNode *root;
 };
-
 
 // Check if JPEG
 int jpeg(const char *filename) {
@@ -93,6 +97,7 @@ int jpeg(const char *filename) {
     }
 }
 
+// Find Dimensions
 struct Dimensions dimension(const char *filename) {
     FILE *input = fopen(filename, "rb");
     struct Dimensions dimension = {0, 0};
@@ -126,8 +131,6 @@ struct Dimensions dimension(const char *filename) {
 
     return dimension;
 }
-
-
 
 // Parse Headers
 struct HeaderWrapper parseheader(const char *filename) {
@@ -235,34 +238,53 @@ struct HeaderWrapper parseheader(const char *filename) {
 // Parse DHT
 struct DHTWrapper parseDHT(struct HeaderWrapper wrapper) {
     struct DHTWrapper dhtwrapper;
-    dhtwrapper.dhtdata = (struct DHTData *)malloc(wrapper.dhtcount * sizeof(struct DHTData));
-    dhtwrapper.dhtdatacount = wrapper.dhtcount;
-    int counter;
-    for (int i = 0; i < wrapper.dhtcount; i++) {
-        int tcth = wrapper.dht[i].data[4];
-        dhtwrapper.dhtdata[i].Tc = (tcth & 0xF0) >> 4;
-        dhtwrapper.dhtdata[i].Th = (tcth & 0x0F);
-        
-        int symlength = 0;
-        for (int j = 0; j < 16; j++) {
-            dhtwrapper.dhtdata[i].numcodes[j] = wrapper.dht[i].data[j + 5];
-            symlength += wrapper.dht[i].data[j + 5];
-        }
+    dhtwrapper.segment = (struct DHTSegment *)malloc(wrapper.dhtcount * sizeof(struct DHTSegment));
+    dhtwrapper.segmentcount = wrapper.dhtcount;
 
-        dhtwrapper.dhtdata[i].symlength = symlength;
-        if (dhtwrapper.dhtdata[i].symbols == NULL) {
-            perror("malloc error"); 
-            return dhtwrapper; 
-        }
-        
-        dhtwrapper.dhtdata[i].symbols = (uint8_t *)malloc(symlength);
-        for (int k = 0; k < symlength; k++) {
-            dhtwrapper.dhtdata[i].symbols[k] = wrapper.dht[i].data[k + 21];
+    for (int i = 0; i < wrapper.dhtcount; i++) {
+        struct DHTSegment *segment = &dhtwrapper.segment[i];
+        segment->length = wrapper.dht[i].length;
+        segment->table = NULL;
+        segment->tablecount = 0;
+        int counter = 4;
+
+        while (counter < segment->length) {
+            if (segment->table == NULL) {
+                segment->table = (struct DHTData *)malloc(sizeof(struct DHTData));
+            } else {
+                segment->table = (struct DHTData *)realloc(segment->table, (segment->tablecount + 1) * sizeof(struct DHTData)); 
+            }
+
+            struct DHTData *table = &segment->table[segment->tablecount];
+            int tcth = wrapper.dht[i].data[counter];
+            table->Tc = (tcth & 0xF0) >> 4;
+            table->Th = (tcth & 0x0F);
+            counter++;
+
+            int symlength = 0;
+            for (int j = 0; j < 16; j++) {
+                table->numcodes[j] = wrapper.dht[i].data[j + counter];
+                symlength += wrapper.dht[i].data[j + counter];
+            }
+            counter += 16;
+
+            table->symlength = symlength;
+            table->symbols = (uint8_t *)malloc(symlength);
+            if (table->symbols == NULL) {
+                perror("malloc error"); 
+                return dhtwrapper; 
+            }
+            
+            for (int k = 0; k < symlength; k++) {
+                table->symbols[k] = wrapper.dht[i].data[k + counter];
+            }
+            counter += symlength;
+
+            segment->tablecount++;
         }
     }
     return dhtwrapper;
 }
-
 
 // Create Huffman Tables
 struct HuffmanNode* createNode(bool leaf, uint8_t symbol, int frequency) {
@@ -274,6 +296,7 @@ struct HuffmanNode* createNode(bool leaf, uint8_t symbol, int frequency) {
     node->right = NULL;
     return node;
 }
+
 
 
 // YCbCr to RGB
@@ -293,7 +316,6 @@ struct Color rgb(int y, int cb, int cr) {
 
 
 int main(int argc, char *argv[]) {
-
     if (argc > 2 || argc == 1) {
         printf("Usage: ./code (filename)");
         return 0;
@@ -357,21 +379,27 @@ int main(int argc, char *argv[]) {
     printf("\n");
 
     struct DHTWrapper dhtw = parseDHT(hw);
-    for (int i = 0; i < dhtw.dhtdatacount; i++) {
-        printf("DHT Tc: %i\n", dhtw.dhtdata[i].Tc);
-        printf("DHT Th: %i\n", dhtw.dhtdata[i].Th);
+    for (int i = 0; i < dhtw.segmentcount; i++) {
+        struct DHTSegment segment = dhtw.segment[i];
+        printf("DHT Segment (%i):\n", i + 1);
 
-        printf("DHT NumCodes: ");
-        for (int j = 0; j < 16; j++) {
-            printf("%d ", dhtw.dhtdata[i].numcodes[j]);
-        }
-        printf("\n");
+        for (int j = 0; j < segment.tablecount; j++) {
+            struct DHTData table = segment.table[j];
+            printf("Table (%i):\n", j + 1);
+            printf("DHT Tc: %i\n", table.Tc);
+            printf("DHT Th: %i\n", table.Th);
 
-        printf("DHT Symbols: ");
-        for (int k = 0; k < dhtw.dhtdata[i].symlength; k++) {
-            printf("%d ", dhtw.dhtdata[i].symbols[k]);
+            printf("DHT NumCodes: ");
+            for (int k = 0; k < 16; k++) {
+                printf("%d ", table.numcodes[k]);
+            }
+            printf("\n");
+
+            printf("DHT Symbols: ");
+            for (int l = 0; l < table.symlength; l++) {
+                printf("%d ", table.symbols[l]);
+            }
         }
-        printf("\n");
+        printf("\n\n");
     }
-    
 }
