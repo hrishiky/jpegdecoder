@@ -15,8 +15,4 @@
 
 ㅤㅤㅤㅤ•ㅤconverts JPEG's YCbCr to RGB pixel data
 
-ㅤㅤ•ㅤcan convert the decoded JPEG data to ASCII art
-
-ㅤㅤ•ㅤoptions to export image pixel and header data and ASCII art as .json or .txt
-
 
