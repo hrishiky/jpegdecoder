@@ -5,14 +5,6 @@
 
 ㅤㅤ•ㅤwritten in plain C with no image libraries (only standard libraries like <stdio.h>)
 
-ㅤㅤ•ㅤdecodes pixel data straight from the JPEG binary data
+ㅤㅤ•ㅤreads header and compressed image data straight from the JPEG binary data
 
-ㅤㅤㅤㅤ•ㅤparses headers and saves their internal data
-
-ㅤㅤㅤㅤ•ㅤcreates Huffman tables to sort and decode data into
-
-ㅤㅤㅤㅤ•ㅤuses Inverse Discrete Cosine Tranform to decode compressed image data
-
-ㅤㅤㅤㅤ•ㅤconverts JPEG's YCbCr to RGB pixel data
-
-
+ㅤㅤ•ㅤsaves header data to custom data types and decodes some important ones (DHT, DQT)
